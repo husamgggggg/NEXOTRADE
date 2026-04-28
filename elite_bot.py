@@ -2308,7 +2308,7 @@ def build_push_payload(sig):
     return {
         "title": "صفقة جديدة | NEXO TRADE",
         "body": f"{sig.get('pair','--')} {direction} • {sig.get('confidence', 0)}%",
-        "icon": "/uploads/nexo_logo_transparent.png",
+        "icon": "/uploads/nexo.png",
         "url": "/dashboard",
     }
 
@@ -2706,6 +2706,10 @@ HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NEXO TRADE | Trading Signals</title>
+<meta name="theme-color" content="#050B16">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/uploads/nexo.png">
+<link rel="apple-touch-icon" href="/uploads/nexo.png">
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -4716,6 +4720,10 @@ LANDING_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NEXO TRADE</title>
+<meta name="theme-color" content="#050B16">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" href="/uploads/nexo.png">
+<link rel="apple-touch-icon" href="/uploads/nexo.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#050B16;--bg2:#0D1322;--blue:#1565FF;--blue2:#38A8FF;--text:#EDF4FF;--muted:#C8D5E7}
@@ -5694,14 +5702,45 @@ async def route_push_subscribe(req):
     except Exception as e:
         return web.json_response({"ok": False, "msg": str(e)}, status=500)
 
-SW_JS = r"""self.addEventListener("push", (event) => {
+MANIFEST_JSON = {
+    "name": "NEXO TRADE",
+    "short_name": "NEXO",
+    "description": "NEXO TRADE trading signals dashboard.",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#050B16",
+    "theme_color": "#050B16",
+    "icons": [
+        {
+            "src": "/uploads/nexo.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/uploads/nexo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
+
+SW_JS = r"""self.addEventListener("install", (event) => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) {}
   const title = data.title || "NEXO TRADE";
   const options = {
     body: data.body || "New trade signal",
-    icon: data.icon || "/uploads/nexo_logo_transparent.png",
-    badge: data.icon || "/uploads/nexo_logo_transparent.png",
+    icon: data.icon || "/uploads/nexo.png",
+    badge: data.icon || "/uploads/nexo.png",
     data: { url: data.url || "/dashboard" }
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -5722,6 +5761,12 @@ self.addEventListener("notificationclick", (event) => {
 
 async def route_sw_js(req):
     return web.Response(text=SW_JS, content_type="application/javascript")
+
+async def route_manifest(req):
+    return web.Response(
+        text=json.dumps(MANIFEST_JSON, ensure_ascii=False),
+        content_type="application/manifest+json",
+    )
 
 async def route_status(req):
     latest = HISTORY[0] if HISTORY else None
@@ -5841,6 +5886,7 @@ def main():
     app.router.add_post("/api/push/subscribe",  route_push_subscribe)
     app.router.add_get("/api/status",           route_status)
     app.router.add_get("/sw.js",                route_sw_js)
+    app.router.add_get("/manifest.webmanifest", route_manifest)
     app.router.add_post("/api/bot/start",       route_start)
     app.router.add_post("/api/bot/stop",        route_stop)
     app.router.add_post("/api/analyze",         route_analyze)
