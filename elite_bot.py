@@ -5706,20 +5706,23 @@ MANIFEST_JSON = {
     "name": "NEXO TRADE",
     "short_name": "NEXO",
     "description": "NEXO TRADE trading signals dashboard.",
+    "id": "/",
+    "lang": "ar",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",
+    "orientation": "portrait",
     "background_color": "#050B16",
     "theme_color": "#050B16",
     "icons": [
         {
-            "src": "/uploads/nexo.png",
+            "src": "/uploads/nexo-192.png",
             "sizes": "192x192",
             "type": "image/png",
             "purpose": "any maskable"
         },
         {
-            "src": "/uploads/nexo.png",
+            "src": "/uploads/nexo-512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any maskable"
@@ -5732,6 +5735,19 @@ SW_JS = r"""self.addEventListener("install", (event) => {
 });
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.pathname.startsWith("/api/")) return;
+  event.respondWith(
+    fetch(req).then((res) => {
+      const copy = res.clone();
+      caches.open("nexo-static-v1").then((cache) => cache.put(req, copy)).catch(() => {});
+      return res;
+    }).catch(() => caches.match(req).then((cached) => cached || caches.match("/")))
+  );
 });
 self.addEventListener("push", (event) => {
   let data = {};
