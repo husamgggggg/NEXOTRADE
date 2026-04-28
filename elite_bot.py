@@ -2412,8 +2412,7 @@ def set_request_status(req, new_status, actor="admin"):
             )
     return req
 
-async def answer_callback(session, callback_id, text):
-    tok = CONFIG["tg_token"]
+async def answer_callback(session, callback_id, text, tok):
     if not tok:
         return
     try:
@@ -2427,7 +2426,8 @@ async def answer_callback(session, callback_id, text):
 
 async def process_tg_updates():
     global TG_UPDATE_OFFSET
-    tok = CONFIG["tg_token"]
+    # Callback buttons for join/access requests are sent via ACCESS TG bot (when configured).
+    tok = CONFIG.get("access_tg_token") or CONFIG.get("tg_token")
     if not tok:
         return
     async with aiohttp.ClientSession() as session:
@@ -2450,24 +2450,24 @@ async def process_tg_updates():
                         cb_data = cb.get("data", "")
                         parts = cb_data.split(":")
                         if len(parts) != 3 or parts[0] != "join":
-                            await answer_callback(session, cb["id"], "إجراء غير معروف")
+                            await answer_callback(session, cb["id"], "إجراء غير معروف", tok)
                             continue
                         action, req_id = parts[1], parts[2]
                         req = find_request(req_id)
                         if not req:
-                            await answer_callback(session, cb["id"], "الطلب غير موجود")
+                            await answer_callback(session, cb["id"], "الطلب غير موجود", tok)
                             continue
                         if req["status"] != "pending":
-                            await answer_callback(session, cb["id"], f"تمت المعالجة سابقاً: {req['status']}")
+                            await answer_callback(session, cb["id"], f"تمت المعالجة سابقاً: {req['status']}", tok)
                             continue
                         if action == "approve":
                             set_request_status(req, "approved", actor=f"tg:{cb.get('from',{}).get('id','?')}")
-                            await answer_callback(session, cb["id"], "تم قبول المستخدم ✅")
+                            await answer_callback(session, cb["id"], "تم قبول المستخدم ✅", tok)
                         elif action == "reject":
                             set_request_status(req, "rejected", actor=f"tg:{cb.get('from',{}).get('id','?')}")
-                            await answer_callback(session, cb["id"], "تم رفض الطلب ❌")
+                            await answer_callback(session, cb["id"], "تم رفض الطلب ❌", tok)
                         else:
-                            await answer_callback(session, cb["id"], "إجراء غير معروف")
+                            await answer_callback(session, cb["id"], "إجراء غير معروف", tok)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
@@ -5686,7 +5686,7 @@ def main():
 
     async def on_startup(_app):
         global tg_updates_task, bot_task
-        if CONFIG["tg_token"]:
+        if CONFIG.get("access_tg_token") or CONFIG.get("tg_token"):
             tg_updates_task = asyncio.create_task(process_tg_updates())
             L.info("🤖 Telegram callback listener started")
         # Auto-run bot on process start when Telegram is configured.
