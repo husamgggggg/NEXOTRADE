@@ -5708,9 +5708,11 @@ MANIFEST_JSON = {
     "description": "NEXO TRADE trading signals dashboard.",
     "id": "/",
     "lang": "ar",
+    "dir": "rtl",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",
+    "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
     "orientation": "portrait",
     "background_color": "#050B16",
     "theme_color": "#050B16",
@@ -5747,14 +5749,14 @@ MANIFEST_JSON = {
     "screenshots": [
         {
             "src": "/uploads/nexo_landing_bg_mobile.png",
-            "sizes": "1080x1920",
+            "sizes": "941x1672",
             "type": "image/png",
             "form_factor": "narrow",
             "label": "NEXO mobile landing"
         },
         {
             "src": "/uploads/nexo_landing_bg.png",
-            "sizes": "1920x1080",
+            "sizes": "1672x941",
             "type": "image/png",
             "form_factor": "wide",
             "label": "NEXO desktop landing"
