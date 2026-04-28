@@ -104,6 +104,11 @@ CONFIG = {
     "webpush_public_key": os.environ.get("WEBPUSH_PUBLIC_KEY", "").strip(),
     "webpush_private_key": os.environ.get("WEBPUSH_PRIVATE_KEY", "").strip(),
     "webpush_subject": os.environ.get("WEBPUSH_SUBJECT", "mailto:admin@nexora-investment.com").strip(),
+    "android_package_name": os.environ.get("ANDROID_PACKAGE_NAME", "com.nexora.investment.twa").strip(),
+    "android_sha256_cert": os.environ.get(
+        "ANDROID_SHA256_CERT",
+        "E3:4C:A1:EF:8D:27:E9:1C:82:5A:0D:F9:6F:55:E2:4D:23:6A:5B:97:3C:E5:A6:9D:68:12:90:8F:BF:3E:5C:5E",
+    ).strip(),
 
     # إعدادات
     "admin_pass"    : os.environ.get("ADMIN_PASSWORD", "admin123"),
@@ -5723,13 +5728,13 @@ MANIFEST_JSON = {
             "src": "/uploads/nexo-192.png",
             "sizes": "192x192",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "any"
         },
         {
             "src": "/uploads/nexo-512.png",
             "sizes": "512x512",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "any"
         }
     ],
     "shortcuts": [
@@ -5832,6 +5837,23 @@ async def route_manifest(req):
     return web.Response(
         text=json.dumps(MANIFEST_JSON, ensure_ascii=False),
         content_type="application/manifest+json",
+    )
+
+async def route_assetlinks(req):
+    package_name = CONFIG.get("android_package_name", "").strip()
+    cert = CONFIG.get("android_sha256_cert", "").strip().upper().replace(" ", "")
+    payload = [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": package_name,
+            "sha256_cert_fingerprints": [cert] if cert else [],
+        },
+    }]
+    return web.Response(
+        text=json.dumps(payload, ensure_ascii=False),
+        content_type="application/json",
+        headers={"Cache-Control": "no-store"},
     )
 
 async def route_status(req):
@@ -5953,6 +5975,7 @@ def main():
     app.router.add_get("/api/status",           route_status)
     app.router.add_get("/sw.js",                route_sw_js)
     app.router.add_get("/manifest.webmanifest", route_manifest)
+    app.router.add_get("/.well-known/assetlinks.json", route_assetlinks)
     app.router.add_post("/api/bot/start",       route_start)
     app.router.add_post("/api/bot/stop",        route_stop)
     app.router.add_post("/api/analyze",         route_analyze)
