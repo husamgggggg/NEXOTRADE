@@ -5714,6 +5714,8 @@ MANIFEST_JSON = {
     "orientation": "portrait",
     "background_color": "#050B16",
     "theme_color": "#050B16",
+    "categories": ["finance", "business", "productivity"],
+    "prefer_related_applications": False,
     "icons": [
         {
             "src": "/uploads/nexo-192.png",
@@ -5727,26 +5729,72 @@ MANIFEST_JSON = {
             "type": "image/png",
             "purpose": "any maskable"
         }
+    ],
+    "shortcuts": [
+        {
+            "name": "Dashboard",
+            "short_name": "Dashboard",
+            "url": "/dashboard",
+            "icons": [{"src": "/uploads/nexo-192.png", "sizes": "192x192", "type": "image/png"}]
+        },
+        {
+            "name": "Login",
+            "short_name": "Login",
+            "url": "/login",
+            "icons": [{"src": "/uploads/nexo-192.png", "sizes": "192x192", "type": "image/png"}]
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "/uploads/nexo_landing_bg_mobile.png",
+            "sizes": "1080x1920",
+            "type": "image/png",
+            "form_factor": "narrow",
+            "label": "NEXO mobile landing"
+        },
+        {
+            "src": "/uploads/nexo_landing_bg.png",
+            "sizes": "1920x1080",
+            "type": "image/png",
+            "form_factor": "wide",
+            "label": "NEXO desktop landing"
+        }
     ]
 }
 
-SW_JS = r"""self.addEventListener("install", (event) => {
+SW_JS = r"""const CACHE_NAME = "nexo-static-v2";
+const PRECACHE = ["/", "/dashboard", "/manifest.webmanifest", "/uploads/nexo-192.png", "/uploads/nexo-512.png", "/uploads/nexo.png"];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE)).catch(() => {})
+  );
   self.skipWaiting();
 });
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.pathname.startsWith("/api/")) return;
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return;
+  const isStatic = /\.(?:js|css|png|jpg|jpeg|webp|svg|ico|woff2?)$/i.test(url.pathname) || url.pathname.startsWith("/uploads/");
   event.respondWith(
-    fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open("nexo-static-v1").then((cache) => cache.put(req, copy)).catch(() => {});
-      return res;
-    }).catch(() => caches.match(req).then((cached) => cached || caches.match("/")))
+    caches.match(req).then((cached) => {
+      const network = fetch(req).then((res) => {
+        if (res && res.ok && isStatic) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy)).catch(() => {});
+        }
+        return res;
+      });
+      if (cached && isStatic) return cached;
+      return network.catch(() => cached || caches.match("/"));
+    })
   );
 });
 self.addEventListener("push", (event) => {
