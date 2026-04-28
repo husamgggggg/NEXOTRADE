@@ -1882,31 +1882,28 @@ def build_ai_review_payload(signal, candles=None):
 
 def run_hard_filters(payload):
     reasons = []
-    passes = True
+    hard_block = False
+    soft_flags = 0
     adx_val = _safe_float(payload["indicators"].get("adx"), 0)
-    if payload["news"].get("has_high_impact_news"):
-        passes = False
-        reasons.append(f"خبر قوي قريب ({payload['news'].get('event_name')})")
+    # News proximity hard block disabled by request.
     if adx_val and adx_val < 18:
-        passes = False
+        soft_flags += 1
         reasons.append("ADX أقل من 18 (سوق متذبذب)")
     if payload["indicators"].get("bollinger_width") == "tight":
-        passes = False
+        soft_flags += 1
         reasons.append("Bollinger Bands ضيقة جدًا")
     if payload["market_structure"].get("last_5_candles") == "overlap_high":
-        passes = False
+        soft_flags += 1
         reasons.append("الشموع الأخيرة متداخلة بشدة")
     if payload["market_structure"].get("wick_noise") == "high":
-        passes = False
+        soft_flags += 1
         reasons.append("wick noise مرتفع")
     if payload.get("meta", {}).get("near_sr_against"):
-        passes = False
+        soft_flags += 1
         reasons.append("السعر قريب من دعم/مقاومة عكس الاتجاه")
 
     max_allowed_move_pips = max(2.0, _safe_float(payload["meta"].get("bb_width_pips"), 8.0) * 0.35)
-    if _safe_float(payload["timing"].get("price_moved_pips"), 0.0) > max_allowed_move_pips:
-        passes = False
-        reasons.append("السعر تحرك كثيرًا بعد الإشارة")
+    # Post-signal price move hard block disabled by request.
 
     # Indicator contradiction checks.
     direction = payload.get("direction")
@@ -1922,10 +1919,19 @@ def run_hard_filters(payload):
 
     contradictions = sum(1 for ok in (ema_trend_ok, macd_ok, rsi_ok, di_ok) if not ok)
     if contradictions >= 2:
-        passes = False
+        soft_flags += 2
         reasons.append("تعارض قوي بين المؤشرات")
-
-    return {"pass": passes, "reasons": reasons, "max_allowed_move_pips": round(max_allowed_move_pips, 2)}
+    # Balanced mode:
+    # - hard blocks always reject (news / excessive move)
+    # - softer choppy/SR conditions require accumulation before rejecting
+    passes = (not hard_block) and (soft_flags < 3)
+    return {
+        "pass": passes,
+        "reasons": reasons,
+        "max_allowed_move_pips": round(max_allowed_move_pips, 2),
+        "soft_flags": soft_flags,
+        "hard_block": hard_block,
+    }
 
 def _build_ai_review_user_prompt(payload):
     return "راجع الإشارة التالية وأعد JSON فقط:\n" + json.dumps(payload, ensure_ascii=False, indent=2)
@@ -2424,6 +2430,21 @@ async def answer_callback(session, callback_id, text, tok):
     except Exception:
         pass
 
+async def clear_join_request_buttons(session, req):
+    tok = CONFIG.get("access_tg_token") or CONFIG.get("tg_token")
+    ch = CONFIG.get("access_tg_channel") or CONFIG.get("tg_channel")
+    msg_id = (req or {}).get("tg_message_id")
+    if not tok or not ch or not msg_id:
+        return
+    try:
+        await session.post(
+            f"https://api.telegram.org/bot{tok}/editMessageReplyMarkup",
+            json={"chat_id": ch, "message_id": msg_id, "reply_markup": {"inline_keyboard": []}},
+            timeout=aiohttp.ClientTimeout(total=12),
+        )
+    except Exception as e:
+        L.warning(f"Failed to clear join request buttons: {e}")
+
 async def process_tg_updates():
     global TG_UPDATE_OFFSET
     # Callback buttons for join/access requests are sent via ACCESS TG bot (when configured).
@@ -2462,9 +2483,11 @@ async def process_tg_updates():
                             continue
                         if action == "approve":
                             set_request_status(req, "approved", actor=f"tg:{cb.get('from',{}).get('id','?')}")
+                            await clear_join_request_buttons(session, req)
                             await answer_callback(session, cb["id"], "تم قبول المستخدم ✅", tok)
                         elif action == "reject":
                             set_request_status(req, "rejected", actor=f"tg:{cb.get('from',{}).get('id','?')}")
+                            await clear_join_request_buttons(session, req)
                             await answer_callback(session, cb["id"], "تم رفض الطلب ❌", tok)
                         else:
                             await answer_callback(session, cb["id"], "إجراء غير معروف", tok)
@@ -5400,6 +5423,8 @@ async def route_join_approve(req):
     if not target:
         return web.json_response({"ok": False, "msg": "الطلب غير موجود"}, status=404)
     set_request_status(target, "approved")
+    async with aiohttp.ClientSession() as session:
+        await clear_join_request_buttons(session, target)
     return web.json_response({"ok": True})
 
 async def route_join_reject(req):
@@ -5408,6 +5433,8 @@ async def route_join_reject(req):
     if not target:
         return web.json_response({"ok": False, "msg": "الطلب غير موجود"}, status=404)
     set_request_status(target, "rejected")
+    async with aiohttp.ClientSession() as session:
+        await clear_join_request_buttons(session, target)
     return web.json_response({"ok": True})
 
 async def route_cfg_get(req):
