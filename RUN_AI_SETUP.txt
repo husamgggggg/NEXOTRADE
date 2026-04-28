@@ -1,0 +1,40 @@
+NEXO TRADE AI VALIDATOR SETUP
+
+Important:
+- Do not put API keys inside elite_bot.py.
+- The Groq key that was previously pasted in chat should be revoked/rotated.
+- Use environment variables only.
+
+Windows CMD:
+set OANDA_API_KEY=your_oanda_key
+set GROQ_API_KEY=your_new_groq_key
+set ANTHROPIC_API_KEY=your_claude_key_optional
+set AI_PROVIDER=auto
+set AI_CONFIRMATION=true
+python elite_bot.py
+
+Windows PowerShell:
+$env:OANDA_API_KEY="your_oanda_key"
+$env:GROQ_API_KEY="your_new_groq_key"
+$env:ANTHROPIC_API_KEY="your_claude_key_optional"
+$env:AI_PROVIDER="auto"
+$env:AI_CONFIRMATION="true"
+python elite_bot.py
+
+macOS / Linux:
+export OANDA_API_KEY="your_oanda_key"
+export GROQ_API_KEY="your_new_groq_key"
+export ANTHROPIC_API_KEY="your_claude_key_optional"
+export AI_PROVIDER="auto"
+export AI_CONFIRMATION="true"
+python3 elite_bot.py
+
+AI Provider values:
+- auto: use Groq first, then Claude fallback
+- groq: use Groq only
+- claude: use Claude only
+
+Inside the dashboard:
+Control Center -> Settings:
+- AI Provider
+- AI Confirmation ON/OFF
