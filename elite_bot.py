@@ -96,9 +96,6 @@ CONFIG = {
     "ai_review_enabled": os.environ.get("AI_REVIEW_ENABLED", "true").lower() not in ("0", "false", "no", "off"),
     "minimum_ai_confidence": int(os.environ.get("MINIMUM_AI_CONFIDENCE", "75")),
     "ai_failure_mode": os.environ.get("AI_FAILURE_MODE", "reject").strip().lower(),  # reject | strong_only
-    "show_ai_reason": os.environ.get("SHOW_AI_REASON", "false").lower() in ("1", "true", "yes", "on"),
-    "news_filter_before_min": int(os.environ.get("NEWS_FILTER_BEFORE_MIN", "30")),
-    "news_filter_after_min": int(os.environ.get("NEWS_FILTER_AFTER_MIN", "15")),
 
     # إعدادات
     "admin_pass"    : os.environ.get("ADMIN_PASSWORD", "admin123"),
@@ -1779,8 +1776,8 @@ def _candle_overlap_is_high(candles):
 
 def _detect_news_risk(pair, now_dt):
     currencies = _extract_pair_currencies(pair)
-    before_min = int(CONFIG.get("news_filter_before_min", 30) or 30)
-    after_min = int(CONFIG.get("news_filter_after_min", 15) or 15)
+    before_min = 30
+    after_min = 15
     nearest = None
     for ev in CALENDAR_CACHE.get("items", []) or []:
         cur = str(ev.get("currency", "")).upper()
@@ -2271,13 +2268,6 @@ def build_tg(sig):
         f"Pair : {pair_text}",
         f"Entry Time : {sig['next_min']}",
     ]
-    if CONFIG.get("show_ai_reason"):
-        lines += [
-            "━━━━━━━━━━━━━━━━━━━━━━━━",
-            "مراجعة AI:",
-            f"الثقة: {sig.get('confidence', 0)}%",
-            f"السبب: {sig.get('ai_reason') or 'المؤشرات متوافقة'}",
-        ]
     return "\n".join(lines)
 
 async def send_tg(session, msg):
@@ -3407,14 +3397,6 @@ body::after{background:repeating-linear-gradient(135deg, rgba(21,101,255,.08) 0 
                 <option value="strong_only" id="aiFailStrongOpt">Allow Only Strong Strategy Signals</option>
               </select>
             </div>
-            <div class="togrow">
-              <span class="toglbl"><span id="showAIReasonLabel">📝 إظهار سبب AI في تلغرام</span></span>
-              <div class="tog" id="togShowAIReason" onclick="toggleShowAIReason()"></div>
-            </div>
-            <div class="ig">
-              <label><span id="newsWindowLabel">🗞 فلتر الأخبار</span></label>
-              <div id="newsWindowValue" style="font-size:12px;color:var(--mt)">30 دقيقة قبل الخبر / 15 دقيقة بعد الخبر</div>
-            </div>
             <button class="act-btn btn-ch" id="joinChannelBtn" onclick="joinSignalChannel()">
               <span id="joinChannelLabel">🔵 انضمام للقناة</span>
             </button>
@@ -3572,7 +3554,7 @@ const I18N = {
     tgPreviewTitle:"✈️ معاينة رسالة تيليغرام", sendMini:"إرسال", tgWaiting:`📈 إشارات التداول
 
 في انتظار الإشارة الأولى...`, miniLogTitle:"📋 آخر نشاط",
-    controlTitle:"🎮 مركز التحكم", settingsTitle:"⚙️ الإعدادات", pairsTitle:"📊 الأزواج", strategyLabel:"🧠 الاستراتيجية", aiProviderLabel:"🤖 مزود الذكاء الاصطناعي", aiConfirmLabel:"🤖 تأكيد AI", aiReview:"🧠 مراجعة الذكاء الاصطناعي", minAIConf:"🎯 الحد الأدنى لثقة AI", aiFailureMode:"⚠️ عند فشل AI", aiFailReject:"رفض الإشارة", aiFailStrong:"السماح فقط للإشارات القوية", showAIReason:"📝 إظهار سبب AI في تلغرام", newsWindow:"🗞 فلتر الأخبار", newsWindowValue:"30 دقيقة قبل الخبر / 15 دقيقة بعد الخبر", all:"الكل", clear:"مسح", minConf:"الحد الأدنى للثقة", autoTG:"✈️ إرسال تيليغرام تلقائي", joinChannel:"🔵 انضمام للقناة",
+    controlTitle:"🎮 مركز التحكم", settingsTitle:"⚙️ الإعدادات", pairsTitle:"📊 الأزواج", strategyLabel:"🧠 الاستراتيجية", aiProviderLabel:"🤖 مزود الذكاء الاصطناعي", aiConfirmLabel:"🤖 تأكيد AI", aiReview:"🧠 مراجعة الذكاء الاصطناعي", minAIConf:"🎯 الحد الأدنى لثقة AI", aiFailureMode:"⚠️ عند فشل AI", aiFailReject:"رفض الإشارة", aiFailStrong:"السماح فقط للإشارات القوية", all:"الكل", clear:"مسح", minConf:"الحد الأدنى للثقة", autoTG:"✈️ إرسال تيليغرام تلقائي", joinChannel:"🔵 انضمام للقناة",
     btnStart:"▶ تشغيل البوت", btnStop:"⏹ إيقاف البوت", analyzeNow:"🔍 تحليل فوري الآن", sendTG:"✈️ إرسال آخر إشارة لتيليغرام",
     logsTitle:"السجل", logsDesc:"مراجعة نشاط البوت وسجل الإشارات فقط.", activityTitle:"📋 سجل النشاط الكامل", signalHistoryTitle:"🧠 سجل الإشارات", activityCenter:"Activity Center",
     emptySignalsTitle:"لا توجد إشارات بعد", emptySignalsDesc:"ستظهر هنا الإشارات التي يولدها البوت", waitingStart:"في انتظار البدء...",
@@ -3606,7 +3588,7 @@ const I18N = {
     tgPreviewTitle:"✈️ Telegram Preview", sendMini:"Send", tgWaiting:`📈 Trading Signals
 
 Waiting for the first signal...`, miniLogTitle:"📋 Latest Activity",
-    controlTitle:"🎮 Control Center", settingsTitle:"⚙️ Settings", pairsTitle:"📊 Pairs", strategyLabel:"🧠 Strategy", aiProviderLabel:"🤖 AI Provider", aiConfirmLabel:"🤖 AI Confirmation", aiReview:"🧠 AI Review", minAIConf:"🎯 Minimum AI Confidence", aiFailureMode:"⚠️ On AI Failure", aiFailReject:"Reject Signal", aiFailStrong:"Allow Only Strong Strategy Signals", showAIReason:"📝 Show AI reason in Telegram", newsWindow:"🗞 News Filter", newsWindowValue:"30 minutes before / 15 minutes after", all:"All", clear:"Clear", minConf:"Minimum confidence", autoTG:"✈️ Auto Telegram", joinChannel:"🔵 Join Channel",
+    controlTitle:"🎮 Control Center", settingsTitle:"⚙️ Settings", pairsTitle:"📊 Pairs", strategyLabel:"🧠 Strategy", aiProviderLabel:"🤖 AI Provider", aiConfirmLabel:"🤖 AI Confirmation", aiReview:"🧠 AI Review", minAIConf:"🎯 Minimum AI Confidence", aiFailureMode:"⚠️ On AI Failure", aiFailReject:"Reject Signal", aiFailStrong:"Allow Only Strong Strategy Signals", all:"All", clear:"Clear", minConf:"Minimum confidence", autoTG:"✈️ Auto Telegram", joinChannel:"🔵 Join Channel",
     btnStart:"▶ Start Bot", btnStop:"⏹ Stop Bot", analyzeNow:"🔍 Analyze Now", sendTG:"✈️ Send Last Signal",
     logsTitle:"Logs", logsDesc:"Review bot activity and signal history only.", activityTitle:"📋 Full Activity Log", signalHistoryTitle:"🧠 Signal History", activityCenter:"Activity Center",
     emptySignalsTitle:"No signals yet", emptySignalsDesc:"Generated signals will appear here", waitingStart:"Waiting to start...",
@@ -3664,8 +3646,8 @@ function applyLanguage(){
   const tgPrev=document.getElementById('tgPrev'); if(tgPrev && !lastSig) tgPrev.textContent=t('tgWaiting');
   setText('controlTitle', t('controlTitle')); setText('settingsTitle', t('settingsTitle')); setText('pairsTitle', t('pairsTitle')); setHTML('timingInfoHtml', t('timingInfo'));
   setText('strategyLabel', t('strategyLabel')); setText('aiConfirmLabel', t('aiConfirmLabel'));
-  setText('aiReviewLabel', t('aiReview')); setText('minAIConfLabel', t('minAIConf')); setText('aiFailureModeLabel', t('aiFailureMode')); setText('showAIReasonLabel', t('showAIReason'));
-  setText('aiFailRejectOpt', t('aiFailReject')); setText('aiFailStrongOpt', t('aiFailStrong')); setText('newsWindowLabel', t('newsWindow')); setText('newsWindowValue', t('newsWindowValue'));
+  setText('aiReviewLabel', t('aiReview')); setText('minAIConfLabel', t('minAIConf')); setText('aiFailureModeLabel', t('aiFailureMode'));
+  setText('aiFailRejectOpt', t('aiFailReject')); setText('aiFailStrongOpt', t('aiFailStrong'));
   setText('allPairsLabel', t('all')); setText('clearPairsLabel', t('clear')); setText('minConfLabel', t('minConf')); setText('autoTGLabel', t('autoTG'));
   setText('joinChannelLabel', t('joinChannel'));
   setText('btnStartLabel', t('btnStart')); setText('btnStopLabel', t('btnStop')); setText('analyzeBtnLabel', t('analyzeNow')); setText('sendTGLabel', t('sendTG'));
@@ -4168,10 +4150,6 @@ function init() {
     if (minAIConf) minAIConf.value = String(d.minimum_ai_confidence || 75);
     const aiFailureMode = document.getElementById("aiFailureMode");
     if (aiFailureMode) aiFailureMode.value = (d.ai_failure_mode || "reject");
-    const togShowAIReason = document.getElementById("togShowAIReason");
-    if (togShowAIReason) togShowAIReason.classList.toggle("on", d.show_ai_reason === true);
-    const nw = document.getElementById("newsWindowValue");
-    if (nw) nw.textContent = `${d.news_filter_before_min || 30} دقيقة قبل الخبر / ${d.news_filter_after_min || 15} دقيقة بعد الخبر`;
     renderStrategyOptions();
     renderPairs(); updatePC();
   });
@@ -4329,11 +4307,6 @@ function saveAIFailureMode(){
   const el=document.getElementById("aiFailureMode");
   fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({ai_failure_mode:(el ? el.value : "reject")})});
-}
-function toggleShowAIReason(){
-  const el=document.getElementById("togShowAIReason"); el.classList.toggle("on");
-  fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({show_ai_reason:el.classList.contains("on")})});
 }
 function joinSignalChannel(){
   if (!signalChannelUrl) {
@@ -5452,14 +5425,6 @@ async def route_cfg_set(req):
         CONFIG["minimum_ai_confidence"] = 75
     mode = str(CONFIG.get("ai_failure_mode", "reject")).lower()
     CONFIG["ai_failure_mode"] = mode if mode in ("reject", "strong_only") else "reject"
-    try:
-        CONFIG["news_filter_before_min"] = max(0, min(180, int(CONFIG.get("news_filter_before_min", 30))))
-    except Exception:
-        CONFIG["news_filter_before_min"] = 30
-    try:
-        CONFIG["news_filter_after_min"] = max(0, min(180, int(CONFIG.get("news_filter_after_min", 15))))
-    except Exception:
-        CONFIG["news_filter_after_min"] = 15
     if CONFIG.get("auto_telegram"):
         CONFIG["strategy"] = "smart_auto"
         forced_pairs = []
