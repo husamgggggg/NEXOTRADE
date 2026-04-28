@@ -17,6 +17,11 @@ from html import unescape
 from aiohttp import web
 from zoneinfo import ZoneInfo
 try:
+    from pywebpush import webpush, WebPushException  # type: ignore[reportMissingImports]
+except Exception:
+    webpush = None
+    WebPushException = Exception
+try:
     from bs4 import BeautifulSoup
 except Exception:
     BeautifulSoup = None
@@ -96,6 +101,9 @@ CONFIG = {
     "ai_review_enabled": os.environ.get("AI_REVIEW_ENABLED", "true").lower() not in ("0", "false", "no", "off"),
     "minimum_ai_confidence": int(os.environ.get("MINIMUM_AI_CONFIDENCE", "75")),
     "ai_failure_mode": os.environ.get("AI_FAILURE_MODE", "reject").strip().lower(),  # reject | strong_only
+    "webpush_public_key": os.environ.get("WEBPUSH_PUBLIC_KEY", "").strip(),
+    "webpush_private_key": os.environ.get("WEBPUSH_PRIVATE_KEY", "").strip(),
+    "webpush_subject": os.environ.get("WEBPUSH_SUBJECT", "mailto:admin@nexora-investment.com").strip(),
 
     # إعدادات
     "admin_pass"    : os.environ.get("ADMIN_PASSWORD", "admin123"),
@@ -346,6 +354,14 @@ def init_db():
                 access_request_id TEXT,
                 email TEXT NOT NULL,
                 activated_at TEXT NOT NULL
+            )
+        """)
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                endpoint TEXT PRIMARY KEY,
+                subscription_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             )
         """)
 
@@ -2284,6 +2300,75 @@ async def send_tg(session, msg):
     except Exception as e:
         return False,str(e)
 
+def webpush_is_configured():
+    return bool(webpush and CONFIG.get("webpush_public_key") and CONFIG.get("webpush_private_key"))
+
+def build_push_payload(sig):
+    direction = "⬆️ UP" if sig.get("direction") == "UP" else "⬇️ DOWN"
+    return {
+        "title": "صفقة جديدة | NEXO TRADE",
+        "body": f"{sig.get('pair','--')} {direction} • {sig.get('confidence', 0)}%",
+        "icon": "/uploads/nexo_logo_transparent.png",
+        "url": "/dashboard",
+    }
+
+def save_push_subscription(subscription):
+    endpoint = (subscription or {}).get("endpoint")
+    if not endpoint:
+        return False
+    now = now_iso()
+    blob = json.dumps(subscription, ensure_ascii=False)
+    with db_connect() as con:
+        con.execute(
+            """
+            INSERT INTO push_subscriptions(endpoint, subscription_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(endpoint) DO UPDATE SET subscription_json=excluded.subscription_json, updated_at=excluded.updated_at
+            """,
+            (endpoint, blob, now, now),
+        )
+    return True
+
+def list_push_subscriptions():
+    with db_connect() as con:
+        rows = con.execute("SELECT endpoint, subscription_json FROM push_subscriptions").fetchall()
+    out = []
+    for r in rows:
+        try:
+            out.append((r["endpoint"], json.loads(r["subscription_json"])))
+        except Exception:
+            pass
+    return out
+
+def remove_push_subscription(endpoint):
+    if not endpoint:
+        return
+    with db_connect() as con:
+        con.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+
+async def send_web_push_to_subscribers(sig):
+    if not webpush_is_configured():
+        return
+    payload = json.dumps(build_push_payload(sig), ensure_ascii=False)
+    subscriptions = list_push_subscriptions()
+    if not subscriptions:
+        return
+    for endpoint, sub in subscriptions:
+        try:
+            webpush(
+                subscription_info=sub,
+                data=payload,
+                vapid_private_key=CONFIG["webpush_private_key"],
+                vapid_claims={"sub": CONFIG["webpush_subject"]},
+            )
+        except WebPushException as e:
+            msg = str(e)
+            # 404/410 means invalid subscription endpoint.
+            if "410" in msg or "404" in msg:
+                remove_push_subscription(endpoint)
+        except Exception:
+            pass
+
 def now_iso():
     return datetime.now().isoformat(timespec="seconds")
 
@@ -2598,6 +2683,7 @@ async def bot_loop():
             STATS["total"]  += 1
             STATS["last"]    = now_s
             while len(HISTORY)>30: HISTORY.pop()
+            await send_web_push_to_subscribers(sig)
 
             L.info(f"  🎯 إشارة: {sig['pair']} {sig['direction']} {sig['confidence']}% [{STATS['ai']}]")
 
@@ -4133,6 +4219,7 @@ async function submitJoinPublic() {
 function init() {
   switchTab("live");
   applyLanguage();
+  initWebPushAuto();
   fetch("/api/config").then(r=>r.json()).then(d=>{
     active = new Set(d.active_pairs||[]);
     currentStrategy = d.strategy || "smart_auto";
@@ -4581,6 +4668,43 @@ function notify(msg,type="ok") {
   const el=document.getElementById("notif"); el.textContent=msg;
   el.className="notif "+type; el.style.opacity="1";
   setTimeout(()=>el.style.opacity="0",2500);
+}
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const out = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) out[i] = rawData.charCodeAt(i);
+  return out;
+}
+async function initWebPushAuto(){
+  try{
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+    if (!window.isSecureContext) return;
+    const alreadyAsked = localStorage.getItem("nexoPushAskedV1") === "1";
+    if (!alreadyAsked && Notification.permission === "default") {
+      localStorage.setItem("nexoPushAskedV1", "1");
+      await Notification.requestPermission();
+    }
+    if (Notification.permission !== "granted") return;
+    const keyRes = await fetch("/api/push/public-key");
+    if (!keyRes.ok) return;
+    const keyData = await keyRes.json();
+    if (!keyData || !keyData.public_key) return;
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyData.public_key),
+      });
+    }
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({subscription: sub.toJSON()}),
+    });
+  }catch(_){}
 }
 document.addEventListener("DOMContentLoaded", () => { logged = true; init(); });
 </script>
@@ -5411,7 +5535,7 @@ async def route_join_reject(req):
     return web.json_response({"ok": True})
 
 async def route_cfg_get(req):
-    hidden = {"admin_pass", "tg_token", "tg_channel", "access_tg_token", "access_tg_channel", "oanda_key", "groq_key", "claude_key"}
+    hidden = {"admin_pass", "tg_token", "tg_channel", "access_tg_token", "access_tg_channel", "oanda_key", "groq_key", "claude_key", "webpush_private_key"}
     safe = {k:v for k,v in CONFIG.items() if k not in hidden}
     return web.json_response(safe)
 
@@ -5554,6 +5678,51 @@ async def route_economic_calendar(req):
         "items": items,
     })
 
+async def route_push_public_key(req):
+    if not CONFIG.get("webpush_public_key"):
+        return web.json_response({"ok": False, "msg": "webpush not configured"}, status=404)
+    return web.json_response({"ok": True, "public_key": CONFIG.get("webpush_public_key")})
+
+async def route_push_subscribe(req):
+    try:
+        d = await req.json()
+        sub = d.get("subscription") if isinstance(d, dict) else None
+        if not isinstance(sub, dict):
+            return web.json_response({"ok": False, "msg": "invalid subscription"}, status=400)
+        ok = save_push_subscription(sub)
+        return web.json_response({"ok": ok})
+    except Exception as e:
+        return web.json_response({"ok": False, "msg": str(e)}, status=500)
+
+SW_JS = r"""self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) {}
+  const title = data.title || "NEXO TRADE";
+  const options = {
+    body: data.body || "New trade signal",
+    icon: data.icon || "/uploads/nexo_logo_transparent.png",
+    badge: data.icon || "/uploads/nexo_logo_transparent.png",
+    data: { url: data.url || "/dashboard" }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/dashboard";
+  event.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+    for (const w of wins) {
+      if ("focus" in w) {
+        w.navigate(target);
+        return w.focus();
+      }
+    }
+    return clients.openWindow(target);
+  }));
+});"""
+
+async def route_sw_js(req):
+    return web.Response(text=SW_JS, content_type="application/javascript")
+
 async def route_status(req):
     latest = HISTORY[0] if HISTORY else None
     market_open = is_trading_window_open()
@@ -5668,7 +5837,10 @@ def main():
     app.router.add_get("/api/config",           route_cfg_get)
     app.router.add_post("/api/config",          route_cfg_set)
     app.router.add_get("/api/economic-calendar", route_economic_calendar)
+    app.router.add_get("/api/push/public-key",  route_push_public_key)
+    app.router.add_post("/api/push/subscribe",  route_push_subscribe)
     app.router.add_get("/api/status",           route_status)
+    app.router.add_get("/sw.js",                route_sw_js)
     app.router.add_post("/api/bot/start",       route_start)
     app.router.add_post("/api/bot/stop",        route_stop)
     app.router.add_post("/api/analyze",         route_analyze)
@@ -5710,6 +5882,7 @@ def main():
     L.info(f"🔑 طلبات الدخول : http://localhost:{port}/access")
     L.info("🔐 TG ENV: TG_BOT_TOKEN + TG_CHANNEL_ID")
     L.info("🔐 ACCESS TG ENV: ACCESS_REQUEST_TG_BOT_TOKEN + ACCESS_REQUEST_TG_CHANNEL_ID")
+    L.info(f"🔔 WEB PUSH: {'enabled' if webpush_is_configured() else 'disabled'}")
     L.info(f"🗓 Calendar provider : {ECONOMIC_CALENDAR_PROVIDER} ({ECONOMIC_CALENDAR_URL or RAPIDAPI_HOST})")
     L.info(f"⚡ AI : Groq Llama 70B → Claude → محلي")
     L.info(f"⏰ الإشارة قبل نهاية الدقيقة بـ 23 ثانية")
