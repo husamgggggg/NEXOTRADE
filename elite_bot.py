@@ -4960,37 +4960,124 @@ ADMIN_HTML = r"""<!DOCTYPE html>
 <title>لوحة الأدمن</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-body{font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;background:#0a1320;color:#e3edf6;margin:0;direction:rtl;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1100px;margin:0 auto;padding:18px}
-.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-.card{background:#111d2f;border:1px solid #223752;border-radius:12px;padding:10px}
-.list{max-height:420px;overflow:auto}
-.item{border:1px solid #2a425f;border-radius:8px;padding:8px;margin-bottom:7px;font-size:13px}
-button{border:none;border-radius:7px;padding:6px 10px;cursor:pointer;font-weight:700}
-.ok{background:#14b26f;color:#05150f}.no{background:#df4f4f;color:#fff}.muted{background:#2d4661;color:#d9e6f4}
-#LS{position:fixed;inset:0;background:#08101a;display:flex;align-items:center;justify-content:center}
-.box{width:420px;background:#111d2f;border:1px solid #223752;border-radius:12px;padding:18px}
-input{width:100%;padding:10px;border-radius:8px;border:1px solid #2a425f;background:#07101c;color:#e3edf6}
+:root{--card:#101b2f;--card2:#0c1628;--bd:#243a5b;--txt:#e8f1fb;--mut:#9fb4cd;--ok:#22c55e;--no:#ef4444}
+*{box-sizing:border-box}
+body{font-family:'IBM Plex Sans Arabic','Segoe UI',Tahoma,sans-serif;background:radial-gradient(circle at 20% 15%,rgba(45,116,255,.12),transparent 30%),linear-gradient(180deg,#060d18,#091326 45%,#070f1d);color:var(--txt);margin:0;direction:rtl}
+.wrap{max-width:1260px;margin:0 auto;padding:22px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+#counts{font-size:12px;color:var(--mut);padding:8px 10px;border:1px solid var(--bd);border-radius:999px;background:rgba(16,27,47,.65)}
+.toolbar{display:grid;grid-template-columns:1.4fr .8fr;gap:10px;margin-bottom:12px}
+.toolbar input,.toolbar select{width:100%;padding:10px;border-radius:9px;border:1px solid #335784;background:#07101c;color:#e3edf6}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--bd);border-radius:14px;padding:12px;min-height:520px}
+.card h3{margin:0 0 10px;font-size:16px}
+.card .hd{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px}
+.list{max-height:455px;overflow:auto;padding-inline-end:4px}
+.item{border:1px solid #2b4670;border-radius:10px;padding:10px;margin-bottom:8px;font-size:13px;background:rgba(12,23,41,.78)}
+.item b{font-size:14px;color:#d8e7ff}.meta{color:var(--mut);margin-top:2px}
+.actions{display:flex;gap:6px;margin-top:9px}.muted{font-size:12px;color:var(--mut)}
+button{border:none;border-radius:8px;padding:7px 11px;cursor:pointer;font-weight:700}
+.ok{background:rgba(34,197,94,.15);color:#9ef7be;border:1px solid rgba(34,197,94,.38)}
+.no{background:rgba(239,68,68,.14);color:#ffaaaa;border:1px solid rgba(239,68,68,.35)}
+.sm{padding:6px 8px;font-size:11px}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:8px}
+.pager .pinfo{font-size:11px;color:var(--mut)}
+#lastUpdate{font-size:11px;color:var(--mut);margin-inline-start:8px}
+#LS{position:fixed;inset:0;background:rgba(6,12,22,.9);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(5px)}
+.box{width:min(430px,92vw);background:linear-gradient(180deg,#10203a,#0b172b);border:1px solid var(--bd);border-radius:14px;padding:18px}
+#toast{position:fixed;left:18px;bottom:18px;padding:10px 12px;background:#10223c;border:1px solid #2f4d78;border-radius:10px;color:#dceaff;display:none;z-index:99}
+a{color:#8ec5ff;text-decoration:none}
+@media (max-width:980px){.cards{grid-template-columns:1fr}.card{min-height:auto}.list{max-height:340px}.toolbar{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div id="LS"><div class="box">
   <h3>دخول لوحة الأدمن</h3>
   <input id="p" type="password" placeholder="كلمة المرور">
-  <button class="muted" style="margin-top:10px;width:100%" onclick="login()">دخول</button>
+  <button class="sm" style="margin-top:10px;width:100%;background:#26456d;color:#e2efff" onclick="login()">دخول</button>
   <div id="e" style="color:#ff8080;font-size:12px;margin-top:8px;display:none">كلمة المرور غير صحيحة</div>
 </div></div>
 <div class="wrap" id="APP" style="display:none">
-  <div class="top"><h2>لوحة الأدمن</h2><div id="counts"></div></div>
+  <div class="top">
+    <h2>لوحة الأدمن</h2>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="sm" style="background:#26456d;color:#e2efff" onclick="load(true)">تحديث</button>
+      <span id="lastUpdate">آخر تحديث: --:--:--</span>
+      <div id="counts"></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <input id="searchBox" placeholder="بحث بـ Account ID أو Email..." oninput="renderAll()">
+    <select id="statusFilter" onchange="renderAll()">
+      <option value="pending">Pending فقط</option>
+      <option value="all">الكل</option>
+    </select>
+  </div>
   <div class="cards">
-    <div class="card"><h3>طلبات المستخدمين</h3><div id="join" class="list"></div></div>
-    <div class="card"><h3>المستخدمون النشطون</h3><div id="active" class="list"></div></div>
-    <div class="card"><h3>طلبات الدخول</h3><div id="access" class="list"></div></div>
+    <div class="card">
+      <div class="hd"><h3>طلبات المستخدمين</h3><div><button class="ok sm" onclick="bulkAction('join','approve')">قبول الكل</button> <button class="no sm" onclick="bulkAction('join','reject')">رفض الكل</button></div></div>
+      <div id="join" class="list"></div>
+      <div class="pager"><span class="pinfo" id="joinPageInfo">--</span><div><button class="sm" onclick="changePage('join',-1)">السابق</button> <button class="sm" onclick="changePage('join',1)">التالي</button></div></div>
+    </div>
+    <div class="card">
+      <div class="hd"><h3>المستخدمون النشطون</h3><span class="muted">قراءة فقط</span></div>
+      <div id="active" class="list"></div>
+      <div class="pager"><span class="pinfo" id="activePageInfo">--</span><div><button class="sm" onclick="changePage('active',-1)">السابق</button> <button class="sm" onclick="changePage('active',1)">التالي</button></div></div>
+    </div>
+    <div class="card">
+      <div class="hd"><h3>طلبات الدخول</h3><div><button class="ok sm" onclick="bulkAction('access','approve')">قبول الكل</button> <button class="no sm" onclick="bulkAction('access','reject')">رفض الكل</button></div></div>
+      <div id="access" class="list"></div>
+      <div class="pager"><span class="pinfo" id="accessPageInfo">--</span><div><button class="sm" onclick="changePage('access',-1)">السابق</button> <button class="sm" onclick="changePage('access',1)">التالي</button></div></div>
+    </div>
   </div>
 </div>
+<div id="toast"></div>
 <script>
 let poll = null;
+let state = {join_requests:[], active_users:[], access_requests:[], pending_join:0, pending_access:0, active_count:0};
+const PAGE_SIZE = 8;
+let pages = {join:1, active:1, access:1};
+function saveUiState(){
+  const data = {
+    q: document.getElementById("searchBox")?.value || "",
+    status: document.getElementById("statusFilter")?.value || "pending",
+    pages: pages,
+  };
+  localStorage.setItem("nexoAdminUiState", JSON.stringify(data));
+}
+function loadUiState(){
+  try{
+    const raw = localStorage.getItem("nexoAdminUiState");
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if (s && typeof s === "object"){
+      const qEl = document.getElementById("searchBox");
+      const stEl = document.getElementById("statusFilter");
+      if (qEl && typeof s.q === "string") qEl.value = s.q;
+      if (stEl && (s.status === "pending" || s.status === "all")) stEl.value = s.status;
+      if (s.pages && typeof s.pages === "object"){
+        pages.join = parseInt(s.pages.join || 1, 10) || 1;
+        pages.active = parseInt(s.pages.active || 1, 10) || 1;
+        pages.access = parseInt(s.pages.access || 1, 10) || 1;
+      }
+    }
+  }catch(_){}
+}
+function toast(msg){
+  const el=document.getElementById("toast");
+  el.textContent=msg; el.style.display="block";
+  clearTimeout(window.__tst); window.__tst=setTimeout(()=>el.style.display="none",2200);
+}
+function q(){ return (document.getElementById("searchBox")?.value || "").trim().toLowerCase(); }
+function statusMode(){ return document.getElementById("statusFilter")?.value || "pending"; }
+function isMatch(x){
+  const s=q(); if(!s) return true;
+  return String(x.account_id||"").toLowerCase().includes(s) || String(x.email||"").toLowerCase().includes(s);
+}
+function byStatus(list){
+  if(statusMode()==="all") return list;
+  return (list||[]).filter(x=>x.status==="pending");
+}
 async function login(){
   const p=document.getElementById("p").value.trim();
   const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pass:p})});
@@ -4998,28 +5085,70 @@ async function login(){
   if(!d.ok){document.getElementById("e").style.display="block";return;}
   document.getElementById("LS").style.display="none";
   document.getElementById("APP").style.display="block";
-  load(); poll=setInterval(load,2000);
+  loadUiState();
+  await load(); poll=setInterval(load,2000);
 }
 function rowJoin(x){
-  return `<div class="item"><b>${x.account_id}</b><br>${x.email}<br>${String(x.image_url||"").startsWith("/uploads/") ? `<a href="${x.image_url}" target="_blank">عرض الصورة</a>` : `الصورة مرسلة على تيليغرام`}<br>
-  <button class="ok" onclick="approveJoin('${x.id}')">قبول</button>
-  <button class="no" onclick="rejectJoin('${x.id}')">رفض</button></div>`;
+  return `<div class="item"><b>${x.account_id}</b><div class="meta">${x.email||""}</div><div class="meta">${String(x.image_url||"").startsWith("/uploads/")?`<a href="${x.image_url}" target="_blank">عرض الصورة</a>`:`الصورة مرسلة على تيليغرام`}</div><div class="actions"><button class="ok" onclick="approveJoin('${x.id}')">قبول</button><button class="no" onclick="rejectJoin('${x.id}')">رفض</button></div></div>`;
 }
 function rowAccess(x){
-  return `<div class="item"><b>${x.account_id}</b><br>${x.email}<br>${x.created_at}<br>
-  <button class="ok" onclick="approveAccess('${x.id}')">قبول</button>
-  <button class="no" onclick="rejectAccess('${x.id}')">رفض</button></div>`;
+  return `<div class="item"><b>${x.account_id}</b><div class="meta">${x.email||""}</div><div class="meta">${x.created_at||""}</div><div class="actions"><button class="ok" onclick="approveAccess('${x.id}')">قبول</button><button class="no" onclick="rejectAccess('${x.id}')">رفض</button></div></div>`;
 }
-async function approveJoin(id){await fetch(`/api/join-request/${id}/approve`,{method:"POST"});load();}
-async function rejectJoin(id){await fetch(`/api/join-request/${id}/reject`,{method:"POST"});load();}
-async function approveAccess(id){await fetch(`/api/access-request/${id}/approve`,{method:"POST"});load();}
-async function rejectAccess(id){await fetch(`/api/access-request/${id}/reject`,{method:"POST"});load();}
-async function load(){
-  const r=await fetch("/api/admin/overview"); const d=await r.json();
-  document.getElementById("counts").textContent = `Pending Join: ${d.pending_join} | Active: ${d.active_count} | Pending Access: ${d.pending_access}`;
-  document.getElementById("join").innerHTML = (d.join_requests||[]).filter(x=>x.status==="pending").map(rowJoin).join("") || "<div>لا يوجد</div>";
-  document.getElementById("active").innerHTML = (d.active_users||[]).map(x=>`<div class='item'><b>${x.account_id}</b><br>${x.email}<br>${x.activated_at||""}</div>`).join("") || "<div>لا يوجد</div>";
-  document.getElementById("access").innerHTML = (d.access_requests||[]).filter(x=>x.status==="pending").map(rowAccess).join("") || "<div>لا يوجد</div>";
+function rowActive(x){
+  return `<div class='item'><b>${x.account_id}</b><div class="meta">${x.email||""}</div><div class="meta">${x.activated_at||""}</div></div>`;
+}
+async function approveJoin(id){await fetch(`/api/join-request/${id}/approve`,{method:"POST"});toast("تم قبول الطلب");load();}
+async function rejectJoin(id){await fetch(`/api/join-request/${id}/reject`,{method:"POST"});toast("تم رفض الطلب");load();}
+async function approveAccess(id){await fetch(`/api/access-request/${id}/approve`,{method:"POST"});toast("تم قبول طلب الدخول");load();}
+async function rejectAccess(id){await fetch(`/api/access-request/${id}/reject`,{method:"POST"});toast("تم رفض طلب الدخول");load();}
+async function bulkAction(kind, action){
+  const ok = confirm(action==="approve" ? "تأكيد تنفيذ القبول الجماعي؟" : "تأكيد تنفيذ الرفض الجماعي؟");
+  if(!ok) return;
+  const list = kind==="join" ? byStatus(state.join_requests).filter(isMatch) : byStatus(state.access_requests).filter(isMatch);
+  if(!list.length){ toast("لا توجد عناصر مطابقة"); return; }
+  const endpoint = kind==="join" ? "/api/join-request" : "/api/access-request";
+  for(const x of list){ await fetch(`${endpoint}/${x.id}/${action}`,{method:"POST"}); }
+  toast(`تم تنفيذ العملية على ${list.length} عنصر`);
+  load();
+}
+function paginate(list, key){
+  const total = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (pages[key] > total) pages[key] = total;
+  if (pages[key] < 1) pages[key] = 1;
+  const start = (pages[key]-1) * PAGE_SIZE;
+  const part = list.slice(start, start + PAGE_SIZE);
+  const infoEl = document.getElementById(`${key}PageInfo`);
+  if (infoEl) infoEl.textContent = `${pages[key]} / ${total} • ${list.length} عنصر`;
+  return part;
+}
+function changePage(key, step){
+  pages[key] = (pages[key] || 1) + step;
+  saveUiState();
+  renderAll();
+}
+function renderAll(){
+  const joins = byStatus(state.join_requests).filter(isMatch);
+  const access = byStatus(state.access_requests).filter(isMatch);
+  const active = (state.active_users||[]).filter(isMatch);
+  const joinsPage = paginate(joins, "join");
+  const accessPage = paginate(access, "access");
+  const activePage = paginate(active, "active");
+  document.getElementById("join").innerHTML = joinsPage.map(rowJoin).join("") || "<div class='muted'>لا يوجد</div>";
+  document.getElementById("access").innerHTML = accessPage.map(rowAccess).join("") || "<div class='muted'>لا يوجد</div>";
+  document.getElementById("active").innerHTML = activePage.map(rowActive).join("") || "<div class='muted'>لا يوجد</div>";
+  document.getElementById("counts").textContent = `طلبات الانضمام: ${state.pending_join} | النشطون: ${state.active_count} | طلبات الدخول: ${state.pending_access} | نتائج الفلترة: ${joins.length + access.length + active.length}`;
+  saveUiState();
+}
+async function load(showToast){
+  const r=await fetch("/api/admin/overview");
+  const d=await r.json();
+  state = d || state;
+  const now = new Date();
+  const t = now.toLocaleTimeString("en-GB");
+  const lu = document.getElementById("lastUpdate");
+  if (lu) lu.textContent = `آخر تحديث: ${t}`;
+  if (showToast) toast("تم تحديث البيانات");
+  renderAll();
 }
 </script>
 </body>
